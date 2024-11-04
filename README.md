@@ -47,6 +47,7 @@ Install the necessary Python libraries required for the tool by running:
 
 ```bash
 pip install -r requirements.txt
+deactivate
 ```
 
 ### 4. Make the Tool Executable

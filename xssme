@@ -1,0 +1,182 @@
+#!/usr/bin/env python3
+import requests
+from bs4 import BeautifulSoup
+import argparse
+import os
+import sys
+import random
+import time
+import concurrent.futures
+from urllib.parse import urlparse
+
+# Print in red color
+print("\033[91m")
+print(r"""                                     
+                                      __  __   ___        __.....__      
+                                     |  |/  `.'   `.  .-''         '.    
+                                     |   .-.  .-.   '/     .-''"'-.  `.  
+   ____     _____                    |  |  |  |  |  /     /________\   \ 
+  `.   \  .'    /        _        _  |  |  |  |  |  |                  | 
+    `.  `'    .'       .' |     .' | |  |  |  |  |  \    .-------------' 
+      '.    .'        .   | /  .   | |  |  |  |  |  |\    '-.____...---. 
+      .'     `.     .'.'| |//.'.'| |/|__|  |__|  |__| `.             .'  
+    .'  .'`.   `. .'.'.-'  .'.'.-'  /                   `''-...... -'    
+  .'   /    `.   `.'   \_.'.'   \_.'                                     
+ '----'       '----'                                                     
+""")
+print("\033[93m")
+print("               |XSSME| >> By Ahmed Hamdy {Gentil Security}")
+print(r"""                     v1.0.0
+
+""")
+print("\033[0m")
+
+class ColorfulArgParser(argparse.ArgumentParser):
+    def format_help(self):
+        return (
+            "\033[92m" +  
+            super().format_help() +
+            "\033[0m"  
+        )
+
+    def error(self, message):
+        sys.stderr.write(f"\033[91merror: {message}\033[0m\n")
+        self.print_help()
+        sys.exit(2)
+
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36",
+    "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:89.0) Gecko/20100101 Firefox/89.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15",
+    "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:45.0) Gecko/20100101 Firefox/45.0",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1",
+    "Mozilla/5.0 (iPad; CPU OS 13_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0 Safari/604.1",
+    "Mozilla/5.0 (Android 10; Mobile; LG-M255; rv:68.0) Gecko/68.0 Firefox/68.0",
+    "Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Mobile Safari/537.36",
+    "Mozilla/5.0 (Linux; U; Android 9; en-US; SM-J730F Build/PPR1.180610.011) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/74.0.3729.112 Mobile Safari/537.36",
+    "Mozilla/5.0 (Linux; Android 9; SAMSUNG SM-A305F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.157 Mobile Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64; rv:83.0) Gecko/20100101 Firefox/83.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:83.0) Gecko/20100101 Firefox/83.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.105 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.66 Safari/537.36 OPR/73.0.3856.257"
+]
+
+session = requests.Session()
+results = [] 
+
+def load_payloads_from_github(url):
+    response = requests.get(url)
+    return response.text.splitlines()
+
+def random_user_agent():
+    return random.choice(USER_AGENTS) if USER_AGENTS else "Mozilla/5.0"
+
+def find_parameters(url):
+    parameters = []
+
+    try:
+        headers = {'User-Agent': random_user_agent()}
+        response = session.get(url, headers=headers)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        for form in soup.find_all('form'):
+            for input_tag in form.find_all('input'):
+                name = input_tag.get('name')
+                if name and name not in parameters and len(parameters) < 3:
+                    parameters.append(name)
+                    print(f"\033[93m[+] Found input parameter: {name}\033[0m")
+
+        if len(parameters) < 3:
+            for link in soup.find_all('a', href=True):
+                href = requests.compat.urljoin(url, link['href'])
+                if is_same_domain(href, urlparse(url).netloc):
+                    more_parameters = find_parameters(href)
+                    parameters.extend(more_parameters)
+                    if len(parameters) >= 3:
+                        break
+
+    except requests.RequestException as e:
+        print(f"Error accessing {url}: {e}")
+
+    return parameters[:3]
+
+def delay_request():
+    time.sleep(random.uniform(0.1, 0.5))
+
+def check_xss(urls, payloads, parameters, output_file=None):
+    def check_single_xss(url, param):
+        for payload in payloads:
+            full_url = f"{url}?{param}={payload}"
+            headers = {'User-Agent': random_user_agent()}
+            try:
+                delay_request()
+                response = session.get(full_url, headers=headers)
+
+                if payload in response.text:
+                    result = f"[+] XSS Vulnerability Found! Payload: {payload} in URL: {full_url}"
+                    print(f"\033[92m{result}\033[0m")
+                    results.append(result)  
+                    if output_file:
+                        with open(output_file, 'a') as f:
+                            f.write(result + '\n')  
+                else:
+                    print(f"\033[93m[-] No XSS Vulnerability\033[0m for payload: {payload} in URL: {full_url}")
+
+            except requests.RequestException as e:
+                print(f"Error accessing {full_url}: {e}")
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor: 
+        futures = []
+        for url in urls:
+            for param in parameters:
+                print(f"\033[94m[INFO] Checking URL: {url + '?' + param + '=payload'}\033[0m")  
+                futures.append(executor.submit(check_single_xss, url, param))
+
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                future.result()
+            except Exception as exc:
+                print(f"Generated an exception: {exc}")
+
+def save_results_to_file(filename):
+    with open(filename, 'a') as file:  
+        for result in results:
+            file.write(result + '\n')
+
+def main():
+    parser = ColorfulArgParser(description='XSS Vulnerability Scanner with Parameter Discovery')
+    parser.add_argument('url', type=str, help='Target URL to scan for XSS vulnerabilities')
+    parser.add_argument('-v', action='store_true', help='Enable verbose output')
+    parser.add_argument('-o', type=str, help='File to save the results')
+    args = parser.parse_args()
+
+    payloads_url = "https://raw.githubusercontent.com/payloadbox/xss-payload-list/master/Intruder/xss-payload-list.txt"
+    payloads = load_payloads_from_github(payloads_url)
+
+    parameters = find_parameters(args.url)
+
+    if args.v:
+        print(f"\033[94m[INFO] Found {len(parameters)} parameters.\033[0m")  
+
+    try:
+        check_xss([args.url], payloads, parameters, args.o) 
+    except KeyboardInterrupt:
+        print("\n\n[INFO] Interrupted! Saving results...")
+        if args.o:
+            save_results_to_file(args.o)
+            print(f"[INFO] Results saved to {args.o}")
+        sys.exit(0)
+
+    if args.o:
+        save_results_to_file(args.o)  
+
+if __name__ == '__main__':
+    script_name = os.path.basename(sys.argv[0]).replace('.py', '')
+    if script_name != 'xssme':
+        print("\033[91mPlease run the script as 'xssme' instead of 'python3 xssme.py'\033[0m")
+    else:
+        main()

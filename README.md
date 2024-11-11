@@ -102,7 +102,5 @@ Developed by [Ahmed Hamdy](https://github.com/ahmedhamdy0x)
 
 Youtube Channel [Gentil Security](https://www.youtube.com/@gentil.security)
 
-Upwork Profile [Ahmed Hamdy](https://www.upwork.com/freelancers/~01955158a82488323f)
-
 For inquiries or support, feel free to contact me at: **info.gentil.academy@gmail.com**
 
